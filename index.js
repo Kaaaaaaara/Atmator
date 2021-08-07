@@ -1,62 +1,49 @@
-const Discord = require('discord.js');
-const client = new Discord.Client();
-const prefix = '!';
 const fs = require('fs');
-client.commands = new Discord.Collection();
-client.events = new Discord.Collection();
-
-['command_handlers', 'event_handler'].forEach(handler => {
-    require(`./handlers/${handler}`)
-})
+const { Client, Collection, Intents, DiscordAPIError } = require('discord.js');
+const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
+const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+const eventFiles = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
 
 
-const commandFiles = fs.readdirSync('./commands/').filter(file => file.endsWith('.js'));
-for(const file of commandFiles){
-    const command = require(`./commands/${file}`);
+client.commands = new Collection();
 
-    client.commands.set(command.name, command);
+
+for (const file of commandFiles) {
+	const command = require(`./commands/${file}`);
+	client.commands.set(command.name, command);
 }
 
-client.on('ready', () => {
-    client.guilds.cache.get("791477733351096360");
-	console.log(`Logged in as ${client.user.tag}!`);
-});
+for (const file of eventFiles) {
+	const event = require(`./events/${file}`);
+	if (event.once) {
+		client.once(event.name, (...args) => event.execute(...args));
+	} else {
+		client.on(event.name, (...args) => event.execute(...args));
+	}
+}
 
-client.on('message', message =>{
-     if(!message.content.startsWith(prefix) || message.author.bot) return;
+client.on('messageCreate', async message => {
+	if (!client.application?.owner) await client.application?.fetch();
 
-     const args = message.content.slice(prefix.length).split(/ +/);
-     const command = args.shift().toLowerCase();
+	if (message.content.toLowerCase() === '!deploy' && message.author.id === client.application?.owner.id) {
+		const data = {
+			name: 'ping',
+			description: 'Replied with Pong!',
+		};
 
-     if(command == 'ping'){
-         client.commands.get('ping').execute(message, args);
-     } else if (command == 'youtube'){}
-});
-
-client.on('message', message =>{
-    if(!message.content.startsWith(prefix) || message.author.bot) return;
-
-    const args = message.content.slice(prefix.length).split(/ +/);
-    const command = args.shift().toLowerCase();
-
-    if(command == 'test'){
-        client.commands.get('test').execute(message, args);
-    } else if (command == 'test'){}
-});
-
-client.on('message', message =>{
-    if(!message.content.startsWith(prefix) || message.author.bot) return;
-
-    const args = message.content.slice(prefix.length).split(/ +/);
-    const command = args.shift().toLowerCase();
-    if (command === 'clear'){
-        client.commands.get ('clear').execute(message.channel, args);
-    } else if (command === 'play'){
-        client.commands.get ('play').execute(message.channel, args);
-    } else if (command === 'leave'){
-        client.commands.get ('leave').execute(message.channel, args);
-    }
+		const command = await client.guilds.cache.get('SERVER_ID')?.commands.create(data);
+		console.log(command);
+	}
 });
 
 
-client.login('YOUR_BOT_TOKEN');
+client.on('interactionCreate', async interaction => {
+	if (!interaction.isCommand()) return;
+
+	if (interaction.commandName === 'ping') {
+		await interaction.reply('Pong!');
+	}
+});
+
+
+client.login('TOKEN_BOT');
